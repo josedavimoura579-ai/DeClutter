@@ -4,41 +4,59 @@ Um painel de mídia unificado e estritamente cronológico — sem algoritmo, sem
 
 Eu criei o DeClutter pra juntar Reddit, Mastodon e YouTube num único feed, ordenado só por data/hora, exatamente como as redes sociais eram antes dos algoritmos de engajamento decidirem o que a gente vê. Roda 100% no navegador, sem backend, sem conta, sem coleta de dados.
 
+**🔗 Acesse aqui: [josedavimoura579-ai.github.io/DeClutter](https://josedavimoura579-ai.github.io/DeClutter/)**
+
 ## Por quê
 
 Cansei de feeds "inteligentes" que otimizam pra prender minha atenção em vez de me manter informado. Fiz o DeClutter pra devolver o controle: você escolhe as fontes, e elas aparecem na ordem em que aconteceram. Só isso.
 
+## Usando o site
+
+Não precisa instalar nada nem criar conta. É só abrir o link acima e:
+
+1. Toque em **"Fontes"** no topo
+2. Adicione o que você quer acompanhar:
+   - **Reddit** — nome do subreddit, ex: `technology`
+   - **Mastodon** — usuário completo, ex: `@usuario@mastodon.social`
+   - **YouTube** — o Channel ID do canal (encontrado na página do canal em *Sobre → Compartilhar canal → Copiar ID do canal*)
+3. Toque em **"Atualizar"** — as notícias aparecem todas juntas, mais recente primeiro
+
+Outras coisas que dá pra fazer:
+- Ligar/desligar cada fonte na tela usando os botões **Reddit / Mastodon / YouTube** no topo, sem precisar remover nada
+- Buscar por palavra dentro do feed
+- Ativar atualização automática (5, 15 ou 30 min)
+- Trocar pro modo escuro
+- Se uma fonte falhar momentaneamente, o site mostra os últimos itens salvos com um aviso, em vez de sumir tudo
+
+Tudo que você configura fica salvo só no seu próprio navegador — nada é enviado pra nenhum servidor meu ou de terceiros.
+
 ## Funcionalidades
 
-- Feed único combinando **Reddit** (subreddits), **Mastodon** (contas públicas) e **YouTube** (canais)
-- Ordem estritamente cronológica — sem curadoria, sem "conteúdo recomendado"
+- Feed único combinando **Reddit**, **Mastodon** e **YouTube**, em ordem estritamente cronológica
 - Zero anúncios, zero rastreador, zero coleta de dados
-- Configuração das fontes fica salva só no seu navegador (`localStorage`) — não envio nada pra nenhum servidor
+- Cache local: se uma fonte cair, mostra os últimos dados salvos em vez de ficar em branco
+- Filtro por fonte e busca por texto dentro do feed
+- Atualização automática configurável e modo escuro
 - Não precisa de build, framework ou backend: é um único arquivo HTML
 
-## Como usar
+## Rodando localmente / contribuindo
 
-### Direto no navegador
+### Testar local
 
 1. Baixe `index.html` deste repositório
-2. Abra num servidor local (recomendo, evita bloqueios de `file://`):
+2. Sirva com um servidor local (evita bloqueios de `file://`):
    ```bash
    python -m http.server 8080
    ```
-   e acesse `http://127.0.0.1:8080`
-3. Clique em **Configurar fontes** e adicione:
-   - Subreddits (ex: `technology`)
-   - Contas Mastodon (ex: `@usuario@mastodon.social`)
-   - Channel ID do YouTube (encontrado em *Sobre → Compartilhar canal → Copiar ID do canal*)
-4. Clique em **Atualizar feed**
+3. Acesse `http://127.0.0.1:8080`
 
-### Publicando no GitHub Pages (grátis)
+### Publicar sua própria versão
 
-1. Suba `index.html` para a raiz deste repositório
+1. Faça um fork ou suba `index.html` pra raiz do seu repositório
 2. Vá em **Settings → Pages → Source**, selecione a branch `main` e pasta `/ (root)`
-3. Seu painel fica disponível em `https://SEU-USUARIO.github.io/DeClutter/`
+3. Seu painel fica disponível em `https://SEU-USUARIO.github.io/SEU-REPOSITORIO/`
 
-## Como funciona por baixo dos panos
+### Como funciona por baixo dos panos
 
 | Fonte | API usada | Precisa de proxy CORS? |
 |---|---|---|
@@ -46,15 +64,15 @@ Cansei de feeds "inteligentes" que otimizam pra prender minha atenção em vez d
 | Mastodon | API pública do Mastodon (`/api/v1/`) | Não |
 | YouTube | RSS por canal (`youtube.com/feeds/videos.xml`) | Sim |
 
-Reddit e YouTube não liberam CORS para chamadas de navegador, então essas duas passam por um proxy CORS público (com um segundo proxy como plano B, caso o primeiro esteja fora do ar). Mastodon já libera CORS nativamente em praticamente todas as instâncias.
+Reddit e YouTube não liberam CORS para chamadas de navegador, então essas duas passam por proxies CORS públicos, com fallback automático entre três serviços diferentes caso algum esteja fora do ar. Mastodon já libera CORS nativamente em praticamente todas as instâncias.
 
-## Limitações conhecidas
+### Limitações conhecidas
 
 - Depende de proxies CORS de terceiros para Reddit/YouTube, que podem cair ocasionalmente
 - Sem paginação/scroll infinito — mostro só os itens mais recentes de cada fonte a cada atualização
-- Sem notificações push nem atualização automática em segundo plano
+- Sem notificações push
 
-## Contribuindo
+### Contribuindo
 
 Pull requests são bem-vindos. Algumas ideias que tenho em mente pro futuro:
 - Proxy CORS auto-hospedado (Cloudflare Worker) em vez de depender de serviços públicos
