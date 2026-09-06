@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DeClutter — feed cronológico</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #F1EFE6;
+    --paper-dim: #E7E4D8;
+    --ink: #1A1A16;
+    --ink-dim: #6B6858;
+    --rule: #C9C5B4;
+    --reddit: #D9622B;
+    --mastodon: #6E5AD6;
+    --youtube: #C4342B;
+    --err: #B23A2E;
+    --ok: #4B7A4B;
+  }
+  html[data-theme="dark"] {
+    --paper: #17160F;
+    --paper-dim: #201F16;
+    --ink: #EDEAE0;
+    --ink-dim: #948F7C;
+    --rule: #3A3728;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Source Serif 4', Georgia, serif;
+    -webkit-font-smoothing: antialiased;
+    transition: background 0.15s, color 0.15s;
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  header {
+    position: sticky; top: 0; z-index: 5;
+    background: var(--paper);
+    border-bottom: 2px solid var(--ink);
+    padding: 16px 20px 12px;
+  }
+  .masthead { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  .masthead h1 { font-size: 1.5rem; margin: 0; letter-spacing: -0.01em; font-weight: 700; }
+  .masthead .sub { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.06em; }
+
+  .toolbar { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+  button, select, input[type="text"] {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.75rem;
+    background: transparent; border: 1px solid var(--ink); color: var(--ink);
+    padding: 6px 10px; cursor: pointer; border-radius: 2px;
+  }
+  button:hover { background: var(--ink); color: var(--paper); }
+  button.primary { background: var(--ink); color: var(--paper); }
+  button.primary:hover { opacity: 0.85; }
+  button.toggle.active { background: var(--ink); color: var(--paper); }
+  select { cursor: pointer; }
+  #status { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--ink-dim); margin-left: auto; }
+
+  .filters { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; align-items: center; }
+  #searchInput { flex: 1; min-width: 140px; }
+
+  #errors { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--err); margin-top: 8px; }
+  #errors div { margin-bottom: 3px; }
+
+  main { max-width: 700px; margin: 0 auto; padding: 8px 20px 80px; position: relative; }
+  main::before { content: ""; position: absolute; top: 0; bottom: 0; left: 28px; width: 1px; background: var(--rule); }
+
+  .item { position: relative; padding: 18px 0 18px 40px; border-bottom: 1px solid var(--rule); }
+  .item::before {
+    content: ""; position: absolute; left: 24px; top: 26px; width: 9px; height: 9px;
+    border-radius: 50%; background: var(--paper); border: 2px solid var(--ink);
+  }
+  .item .bar { position: absolute; left: 0; top: 18px; bottom: 18px; width: 3px; }
+  .item .meta {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--ink-dim);
+    display: flex; gap: 10px; align-items: center; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em; flex-wrap: wrap;
+  }
+  .item .source-tag { font-weight: 700; }
+  .item .stale-tag { color: var(--err); }
+  .item h2 { font-size: 1.15rem; margin: 0 0 6px; line-height: 1.3; font-weight: 600; }
+  .item h2 a { color: var(--ink); text-decoration: none; }
+  .item h2 a:hover { text-decoration: underline; }
+  .item p { margin: 0; font-size: 0.92rem; color: var(--ink-dim); line-height: 1.5; }
+  .item .row { display: flex; gap: 14px; align-items: flex-start; }
+  .item img.thumb { width: 76px; height: 76px; object-fit: cover; border: 1px solid var(--rule); flex-shrink: 0; }
+
+  .skeleton { padding: 18px 0 18px 40px; border-bottom: 1px solid var(--rule); }
+  .skeleton .bar-line { height: 14px; background: var(--paper-dim); border-radius: 2px; margin-bottom: 8px; width: 60%; }
+  .skeleton .bar-line.short { width: 35%; height: 10px; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .skeleton .bar-line { animation: pulse 1.3s ease-in-out infinite; }
+
+  #empty { padding: 60px 0 60px 40px; color: var(--ink-dim); font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; }
+
+  dialog { border: 2px solid var(--ink); border-radius: 2px; padding: 0; width: min(520px, 92vw); background: var(--paper); color: var(--ink); }
+  dialog::backdrop { background: rgba(26,26,22,0.5); }
+  .modal-inner { padding: 20px 22px; max-height: 82vh; overflow-y: auto; }
+  .modal-inner h2 { font-size: 1.1rem; margin: 0 0 4px; }
+  .modal-inner .hint { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--ink-dim); margin-bottom: 16px; }
+  fieldset { border: 1px solid var(--rule); border-radius: 2px; margin: 0 0 14px; padding: 10px 12px 12px; }
+  legend { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 0 6px; }
+  .source-row { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; font-size: 0.85rem; }
+  .source-row .name { flex: 1; font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; }
+  .source-row .health { font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; }
+  .source-row .health.ok { color: var(--ok); }
+  .source-row .health.err { color: var(--err); }
+  .source-row button { padding: 2px 8px; }
+  .add-row { display: flex; gap: 6px; margin-top: 6px; }
+  .add-row input { flex: 1; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; padding: 6px 8px; border: 1px solid var(--rule); background: var(--paper-dim); color: var(--ink); }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="masthead">
+    <h1>DECLUTTER</h1>
+    <div class="sub" id="clock"></div>
+  </div>
+  <div class="toolbar">
+    <button class="primary" id="refreshBtn">Atualizar</button>
+    <button id="configBtn">Fontes</button>
+    <select id="intervalSelect" title="Atualização automática">
+      <option value="0">Auto: desligado</option>
+      <option value="300000">Auto: 5min</option>
+      <option value="900000">Auto: 15min</option>
+      <option value="1800000">Auto: 30min</option>
+    </select>
+    <button id="themeBtn">Modo escuro</button>
+    <span id="status">carregando…</span>
+  </div>
+  <div class="filters">
+    <button class="toggle active" data-filter="all">Tudo</button>
+    <button class="toggle active" data-filter="reddit">Reddit</button>
+    <button class="toggle active" data-filter="mastodon">Mastodon</button>
+    <button class="toggle active" data-filter="youtube">YouTube</button>
+    <input type="text" id="searchInput" placeholder="buscar no feed…">
+  </div>
+  <div id="errors"></div>
+</header>
+
+<main id="feed">
+  <div id="empty">Nenhuma fonte configurada ainda. Clique em "Fontes" acima.</div>
+</main>
+
+<dialog id="configDialog">
+  <div class="modal-inner">
+    <h2>Fontes do feed</h2>
+    <div class="hint">tudo fica salvo só neste navegador (localStorage), nada é enviado a servidor nenhum</div>
+
+    <fieldset>
+      <legend>Reddit (subreddits)</legend>
+      <div id="redditList"></div>
+      <div class="add-row">
+        <input id="redditInput" placeholder="ex: technology" />
+        <button data-add="reddit">Adicionar</button>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Mastodon (conta pública)</legend>
+      <div id="mastodonList"></div>
+      <div class="add-row">
+        <input id="mastodonInput" placeholder="ex: @usuario@mastodon.social" />
+        <button data-add="mastodon">Adicionar</button>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>YouTube (channel ID)</legend>
+      <div id="youtubeList"></div>
+      <div class="add-row">
+        <input id="youtubeInput" placeholder="ex: UC_x5XG1OV2P6uZZ5FSM9Ttw" />
+        <button data-add="youtube">Adicionar</button>
+      </div>
+      <div class="hint" style="margin-top:6px;margin-bottom:0">
+        acha o Channel ID na página "Sobre" do canal, em "Compartilhar canal → Copiar ID"
+      </div>
+    </fieldset>
+
+    <div class="modal-actions">
+      <button id="closeConfig">Fechar</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+// ---------- config de proxies (com plano B/C) ----------
+const CORS_PROXIES = [
+  url => "https://api.allorigins.win/raw?url=" + encodeURIComponent(url),
+  url => "https://corsproxy.io/?url=" + encodeURIComponent(url),
+  url => "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(url),
+];
+const FETCH_TIMEOUT_MS = 9000;
+const STORE_KEY = "declutter:sources";
+const CACHE_PREFIX = "declutter:cache:";
+const HEALTH_PREFIX = "declutter:health:";
+
+function loadSources() {
+  try { return JSON.parse(localStorage.getItem(STORE_KEY)) || { reddit: [], mastodon: [], youtube: [] }; }
+  catch { return { reddit: [], mastodon: [], youtube: [] }; }
+}
+function saveSources(s) { localStorage.setItem(STORE_KEY, JSON.stringify(s)); }
+let sources = loadSources();
+
+function cacheKey(type, id) { return CACHE_PREFIX + type + ":" + id; }
+function healthKey(type, id) { return HEALTH_PREFIX + type + ":" + id; }
+
+function readCache(type, id) {
+  try { return JSON.parse(localStorage.getItem(cacheKey(type, id))); } catch { return null; }
+}
+function writeCache(type, id, items) {
+  localStorage.setItem(cacheKey(type, id), JSON.stringify({ ts: Date.now(), items }));
+}
+function writeHealth(type, id, ok, message) {
+  localStorage.setItem(healthKey(type, id), JSON.stringify({ ok, message, ts: Date.now() }));
+}
+function readHealth(type, id) {
+  try { return JSON.parse(localStorage.getItem(healthKey(type, id))); } catch { return null; }
+}
+
+async function fetchWithTimeout(url, ms) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, { signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchViaProxy(url) {
+  let lastError;
+  for (const build of CORS_PROXIES) {
+    try {
+      const res = await fetchWithTimeout(build(url), FETCH_TIMEOUT_MS);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res;
+    } catch (e) {
+      lastError = e.name === "AbortError" ? new Error("tempo esgotado") : e;
+    }
+  }
+  throw lastError || new Error("todos os proxies falharam");
+}
+
+// ---------- coleta de dados (com cache de fallback) ----------
+
+async function withCacheFallback(type, id, fetchFn) {
+  try {
+    const items = await fetchFn();
+    writeCache(type, id, items);
+    writeHealth(type, id, true, `${items.length} itens`);
+    return items;
+  } catch (e) {
+    writeHealth(type, id, false, e.message || String(e));
+    const cached = readCache(type, id);
+    if (cached) {
+      return cached.items.map(it => ({ ...it, stale: true, staleTs: cached.ts }));
+    }
+    throw e;
+  }
+}
+
+async function fetchReddit(sub) {
+  return withCacheFallback("reddit", sub, async () => {
+    const url = `https://www.reddit.com/r/${encodeURIComponent(sub)}/new.json?limit=15`;
+    const res = await fetchViaProxy(url);
+    const data = await res.json();
+    return data.data.children.map(c => c.data).map(p => ({
+      source: "reddit", sourceLabel: `r/${sub}`,
+      title: p.title,
+      url: `https://reddit.com${p.permalink}`,
+      ts: p.created_utc * 1000,
+      excerpt: (p.selftext || "").slice(0, 180),
+      image: p.thumbnail && p.thumbnail.startsWith("http") ? p.thumbnail : null,
+    }));
+  });
+}
+
+async function resolveMastodonAccount(instance, handle) {
+  const res = await fetchWithTimeout(`https://${instance}/api/v1/accounts/lookup?acct=${encodeURIComponent(handle)}`, FETCH_TIMEOUT_MS);
+  if (!res.ok) throw new Error("conta não encontrada");
+  return res.json();
+}
+
+async function fetchMastodon(entry) {
+  return withCacheFallback("mastodon", entry, async () => {
+    const [handle, instance] = entry.replace(/^@/, "").split("@");
+    const account = await resolveMastodonAccount(instance, handle);
+    const res = await fetchWithTimeout(`https://${instance}/api/v1/accounts/${account.id}/statuses?limit=15&exclude_replies=true`, FETCH_TIMEOUT_MS);
+    const data = await res.json();
+    return data.map(t => ({
+      source: "mastodon", sourceLabel: `@${handle}@${instance}`,
+      title: stripHtml(t.content).slice(0, 140) || "(sem texto)",
+      url: t.url,
+      ts: new Date(t.created_at).getTime(),
+      excerpt: stripHtml(t.content).slice(0, 180),
+      image: t.media_attachments?.[0]?.preview_url || null,
+    }));
+  });
+}
+
+async function fetchYouTube(channelId) {
+  return withCacheFallback("youtube", channelId, async () => {
+    const url = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
+    const res = await fetchViaProxy(url);
+    const xmlText = await res.text();
+    const xml = new DOMParser().parseFromString(xmlText, "text/xml");
+    if (xml.querySelector("parsererror")) throw new Error("resposta inválida do YouTube");
+    const channelName = xml.querySelector("author > name")?.textContent || "YouTube";
+    return Array.from(xml.querySelectorAll("entry")).map(entry => ({
+      source: "youtube", sourceLabel: channelName,
+      title: entry.querySelector("title")?.textContent || "(sem título)",
+      url: entry.querySelector("link")?.getAttribute("href"),
+      ts: new Date(entry.querySelector("published")?.textContent).getTime(),
+      excerpt: entry.getElementsByTagNameNS("*", "description")[0]?.textContent?.slice(0, 180) || "",
+      image: entry.getElementsByTagNameNS("*", "thumbnail")[0]?.getAttribute("url") || null,
+    }));
+  });
+}
+
+function stripHtml(html) {
+  const div = document.createElement("div");
+  div.innerHTML = html;
+  return div.textContent || "";
+}
+
+// ---------- render ----------
+
+const COLORS = { reddit: "var(--reddit)", mastodon: "var(--mastodon)", youtube: "var(--youtube)" };
+const LABELS = { reddit: "REDDIT", mastodon: "MASTODON", youtube: "YOUTUBE" };
+
+let lastResults = [];
+let activeFilters = new Set(["reddit", "mastodon", "youtube"]);
+let searchTerm = "";
+
+function timeAgo(ts) {
+  const diff = Math.max(0, Date.now() - ts);
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return "agora";
+  if (min < 60) return `${min}min atrás`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h}h atrás`;
+  return `${Math.floor(h / 24)}d atrás`;
+}
+
+function escapeHtml(s) {
+  return (s || "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+function applyFiltersAndRender() {
+  const term = searchTerm.trim().toLowerCase();
+  const filtered = lastResults.filter(it => {
+    if (!activeFilters.has(it.source)) return false;
+    if (!term) return true;
+    return (it.title + " " + it.excerpt).toLowerCase().includes(term);
+  });
+  render(filtered);
+}
+
+function renderSkeleton() {
+  document.getElementById("feed").innerHTML = Array.from({length: 5}).map(() => `
+    <div class="skeleton">
+      <div class="bar-line short"></div>
+      <div class="bar-line"></div>
+    </div>
+  `).join("");
+}
+
+function render(items) {
+  const feed = document.getElementById("feed");
+  if (!items.length) {
+    feed.innerHTML = `<div id="empty">Nenhum item encontrado com os filtros atuais.</div>`;
+    return;
+  }
+  feed.innerHTML = items.map(it => `
+    <div class="item">
+      <div class="bar" style="background:${COLORS[it.source]}"></div>
+      <div class="meta">
+        <span class="source-tag" style="color:${COLORS[it.source]}">${LABELS[it.source]}</span>
+        <span>${escapeHtml(it.sourceLabel)}</span>
+        <span>·</span>
+        <span>${timeAgo(it.ts)}</span>
+        ${it.stale ? `<span class="stale-tag">⚠ dado salvo (offline desde ${timeAgo(it.staleTs)})</span>` : ""}
+      </div>
+      <div class="row">
+        <div style="flex:1">
+          <h2><a href="${it.url}" target="_blank" rel="noopener">${escapeHtml(it.title)}</a></h2>
+          ${it.excerpt ? `<p>${escapeHtml(it.excerpt)}</p>` : ""}
+        </div>
+        ${it.image ? `<img class="thumb" src="${it.image}" alt="" loading="lazy">` : ""}
+      </div>
+    </div>
+  `).join("");
+}
+
+async function refreshFeed() {
+  const status = document.getElementById("status");
+  const errBox = document.getElementById("errors");
+  status.textContent = "buscando…";
+  errBox.innerHTML = "";
+  renderSkeleton();
+
+  const errors = [];
+  const track = (label, promise) => promise.catch(e => {
+    errors.push(`${label}: ${e.message || e}`);
+    return [];
+  });
+
+  const jobs = [
+    ...sources.reddit.map(s => track(`reddit r/${s}`, fetchReddit(s))),
+    ...sources.mastodon.map(s => track(`mastodon ${s}`, fetchMastodon(s))),
+    ...sources.youtube.map(s => track(`youtube ${s}`, fetchYouTube(s))),
+  ];
+  if (!jobs.length) {
+    lastResults = [];
+    applyFiltersAndRender();
+    status.textContent = "nenhuma fonte configurada";
+    return;
+  }
+  const results = (await Promise.all(jobs)).flat();
+  results.sort((a, b) => b.ts - a.ts);
+  lastResults = results;
+  applyFiltersAndRender();
+
+  const staleCount = results.filter(r => r.stale).length;
+  status.textContent = `atualizado às ${new Date().toLocaleTimeString('pt-BR')} · ${results.length} itens${staleCount ? ` (${staleCount} de cache)` : ""}`;
+
+  if (errors.length) {
+    errBox.innerHTML = errors.map(e => `<div>⚠ ${escapeHtml(e)}</div>`).join("") +
+      `<div>Itens de fontes com erro estão sendo mostrados a partir do último cache salvo, se houver.</div>`;
+  }
+  if (location.protocol === "file:") {
+    errBox.innerHTML += `<div>⚠ Você está abrindo o arquivo direto (file://) — se nada carregar, sirva por um servidor local.</div>`;
+  }
+}
+
+// ---------- configuração de fontes ----------
+
+function renderConfigLists() {
+  const make = (key, label) => sources[key].map((v, i) => {
+    const h = readHealth(key, v);
+    const healthHtml = h
+      ? `<span class="health ${h.ok ? 'ok' : 'err'}">${h.ok ? '✓' : '✗'} ${escapeHtml(h.message || '')}</span>`
+      : `<span class="health">— ainda não testado</span>`;
+    return `<div class="source-row"><span class="name">${escapeHtml(v)}</span>${healthHtml}<button data-remove="${key}:${i}">remover</button></div>`;
+  }).join("") || `<div class="hint" style="margin:0">nenhum ${label} adicionado</div>`;
+  document.getElementById("redditList").innerHTML = make("reddit", "subreddit");
+  document.getElementById("mastodonList").innerHTML = make("mastodon", "conta");
+  document.getElementById("youtubeList").innerHTML = make("youtube", "canal");
+}
+
+document.getElementById("configBtn").onclick = () => {
+  renderConfigLists();
+  document.getElementById("configDialog").showModal();
+};
+document.getElementById("closeConfig").onclick = () => document.getElementById("configDialog").close();
+
+document.querySelectorAll("[data-add]").forEach(btn => {
+  btn.onclick = () => {
+    const key = btn.dataset.add;
+    const input = document.getElementById(key + "Input");
+    const val = input.value.trim();
+    if (!val) return;
+    sources[key].push(val);
+    saveSources(sources);
+    input.value = "";
+    renderConfigLists();
+  };
+});
+
+document.addEventListener("click", (e) => {
+  if (e.target.dataset.remove) {
+    const [key, idx] = e.target.dataset.remove.split(":");
+    const removed = sources[key][Number(idx)];
+    sources[key].splice(Number(idx), 1);
+    saveSources(sources);
+    localStorage.removeItem(cacheKey(key, removed));
+    localStorage.removeItem(healthKey(key, removed));
+    renderConfigLists();
+  }
+});
+
+// ---------- filtros e busca ----------
+
+document.querySelectorAll(".toggle").forEach(btn => {
+  btn.onclick = () => {
+    const f = btn.dataset.filter;
+    if (f === "all") {
+      activeFilters = new Set(["reddit", "mastodon", "youtube"]);
+      document.querySelectorAll(".toggle").forEach(b => b.classList.add("active"));
+    } else {
+      if (activeFilters.has(f)) activeFilters.delete(f); else activeFilters.add(f);
+      btn.classList.toggle("active");
+      const allBtn = document.querySelector('[data-filter="all"]');
+      allBtn.classList.toggle("active", activeFilters.size === 3);
+    }
+    applyFiltersAndRender();
+  };
+});
+
+document.getElementById("searchInput").addEventListener("input", (e) => {
+  searchTerm = e.target.value;
+  applyFiltersAndRender();
+});
+
+// ---------- atualização automática ----------
+
+let autoTimer = null;
+document.getElementById("intervalSelect").onchange = (e) => {
+  const ms = Number(e.target.value);
+  if (autoTimer) clearInterval(autoTimer);
+  localStorage.setItem("declutter:interval", ms);
+  if (ms > 0) autoTimer = setInterval(refreshFeed, ms);
+};
+const savedInterval = Number(localStorage.getItem("declutter:interval") || 0);
+if (savedInterval > 0) {
+  document.getElementById("intervalSelect").value = String(savedInterval);
+  autoTimer = setInterval(refreshFeed, savedInterval);
+}
+
+// ---------- tema ----------
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  document.getElementById("themeBtn").textContent = theme === "dark" ? "Modo claro" : "Modo escuro";
+}
+const savedTheme = localStorage.getItem("declutter:theme") || "light";
+applyTheme(savedTheme);
+document.getElementById("themeBtn").onclick = () => {
+  const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+  localStorage.setItem("declutter:theme", next);
+  applyTheme(next);
+};
+
+// ---------- relógio + boot ----------
+
+document.getElementById("refreshBtn").onclick = refreshFeed;
+
+function tickClock() {
+  document.getElementById("clock").textContent = new Date().toLocaleString('pt-BR', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+}
+setInterval(tickClock, 1000 * 30);
+tickClock();
+
+if (sources.reddit.length || sources.mastodon.length || sources.youtube.length) {
+  refreshFeed();
+} else {
+  document.getElementById("status").textContent = "configure suas fontes pra começar";
+}
+</script>
+</body>
+</html>
